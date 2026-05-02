@@ -18,22 +18,33 @@ If you already run [forty-two-watts](https://github.com/frahlg/forty-two-watts),
 
 ## Install
 
-### Pre-built binary
-
-Download from [GitHub Releases](https://github.com/srcfl/hugin-agent/releases). One static binary per platform:
+### macOS / Linux — Homebrew
 
 ```bash
-# macOS / Linux
-curl -sSL https://github.com/srcfl/hugin-agent/releases/latest/download/hugin-agent_$(uname -s)_$(uname -m).tar.gz | tar xz
-./hugin-agent
+brew install srcfl/tap/hugin-agent
+hugin-agent
 ```
 
-### From source
+(Homebrew strips macOS quarantine automatically — no Gatekeeper warning.)
+
+### Windows — Scoop
+
+```powershell
+scoop bucket add srcfl https://github.com/srcfl/scoop-bucket
+scoop install hugin-agent
+hugin-agent
+```
+
+### From source (any platform with Go 1.25+)
 
 ```bash
 go install github.com/srcfl/hugin-agent/cmd/hugin-agent@latest
 hugin-agent
 ```
+
+### Pre-built tarball
+
+Direct downloads at [github.com/srcfl/hugin-agent/releases](https://github.com/srcfl/hugin-agent/releases). On macOS, you'll need to run `xattr -d com.apple.quarantine /path/to/hugin-agent` to bypass Gatekeeper for the unsigned binary — this is exactly what Homebrew does for you.
 
 ### Audit before you run
 
