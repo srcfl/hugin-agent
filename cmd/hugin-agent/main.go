@@ -17,8 +17,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -33,6 +36,8 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "HTTP bind host (use 127.0.0.1 unless you trust your LAN)")
 	port := flag.Int("port", 19090, "HTTP port")
 	tokenFlag := flag.String("token", "", "Pairing token. If empty, a random one is generated.")
+	noBrowser := flag.Bool("no-browser", false, "Don't auto-open the pairing page in a browser")
+	pairingPage := flag.String("pairing-url", "https://hugin.sourceful-labs.net/settings.html", "Web app settings page (rarely overridden — useful for self-hosted Hugin)")
 	flag.Parse()
 
 	if v := os.Getenv("HUGIN_AGENT_HOST"); v != "" {
@@ -77,16 +82,30 @@ func main() {
 		ReadTimeout: 60 * time.Second,
 	}
 
+	// Build the deep-link to the web app's pairing page. Token + URL go
+	// in the URL fragment so they never reach Cloudflare's access logs
+	// — fragments aren't sent to servers. settings.html parses them and
+	// auto-fills the form (then scrubs the URL).
+	pairingDeepLink := fmt.Sprintf("%s#agent_url=%s&token=%s",
+		*pairingPage,
+		url.QueryEscape(fmt.Sprintf("http://%s", addr)),
+		url.QueryEscape(token),
+	)
+
 	// Print pairing details to stderr (so stdout stays clean for tooling).
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintf(os.Stderr, "  Hugin agent %s\n", version)
 	fmt.Fprintf(os.Stderr, "  Listening on %s\n", displayURL)
 	fmt.Fprintf(os.Stderr, "  Pairing token: %s\n", token)
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "  Pair this agent with the web app:")
-	fmt.Fprintln(os.Stderr, "    1. Open https://hugin.sourceful-labs.net/settings.html")
-	fmt.Fprintln(os.Stderr, "    2. Paste the URL above + this token")
-	fmt.Fprintln(os.Stderr, "    3. Click 'Test connection' then 'Save pairing'")
+	if !*noBrowser && openBrowser(pairingDeepLink) {
+		fmt.Fprintln(os.Stderr, "  Opened your browser to finish pairing.")
+		fmt.Fprintln(os.Stderr, "  If nothing happened, paste this URL in manually:")
+		fmt.Fprintf(os.Stderr, "    %s\n", pairingDeepLink)
+	} else {
+		fmt.Fprintln(os.Stderr, "  Pair manually:")
+		fmt.Fprintf(os.Stderr, "    %s\n", pairingDeepLink)
+	}
 	fmt.Fprintln(os.Stderr, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -110,4 +129,26 @@ func main() {
 	defer shutdownCancel()
 	_ = srv.Shutdown(shutdownCtx)
 	log.Println("shutdown complete")
+}
+
+// openBrowser tries to open the user's default browser to the given URL.
+// Returns true on success, false otherwise. Best-effort — we still print
+// the URL to stderr regardless so headless setups can copy it manually.
+func openBrowser(target string) bool {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "windows":
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler"}
+	default:
+		cmd = "xdg-open"
+	}
+	args = append(args, target)
+	c := exec.Command(cmd, args...)
+	c.Stdout = nil
+	c.Stderr = nil
+	return c.Start() == nil
 }
