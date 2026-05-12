@@ -133,6 +133,7 @@ type natsRunner struct {
 	nc      *nats.Conn
 	creds   *natsCreds
 	logger  *log.Logger
+	version string
 	subs    []*nats.Subscription
 }
 
@@ -140,7 +141,11 @@ type natsRunner struct {
 // inline (UserJWTAndSeed) instead of writing a temp file because the
 // API already returned them as fields on the JSON; reusing that
 // avoids a creds-file roundtrip on every reconnect.
-func connectNATS(ctx context.Context, c *natsCreds, lg *log.Logger) (*natsRunner, error) {
+//
+// version is the binary's --version string, surfaced over
+// agent.<id>.req.info so a remote workbench can show "hugin-agent
+// v0.2.0 connected" without a separate roundtrip.
+func connectNATS(ctx context.Context, c *natsCreds, lg *log.Logger, version string) (*natsRunner, error) {
 	if c.NATSURL == "" {
 		return nil, errors.New("creds missing nats_url")
 	}
@@ -171,7 +176,7 @@ func connectNATS(ctx context.Context, c *natsCreds, lg *log.Logger) (*natsRunner
 		return nil, fmt.Errorf("nats connect %s: %w", c.NATSURL, err)
 	}
 	lg.Printf("nats: connected to %s as agent %s", nc.ConnectedUrl(), c.AgentID)
-	return &natsRunner{nc: nc, creds: c, logger: lg}, nil
+	return &natsRunner{nc: nc, creds: c, logger: lg, version: version}, nil
 }
 
 // run subscribes to req.* and starts publishing presence on a
@@ -180,6 +185,8 @@ func (r *natsRunner) run(ctx context.Context) error {
 	subjScan := r.subj("req.scan")
 	subjProbe := r.subj("req.probe")
 	subjRunLua := r.subj("req.run-lua")
+	subjInfo := r.subj("req.info")
+	subjHealth := r.subj("req.health")
 
 	// Each handler decodes the inbound JSON, dispatches into the
 	// shared internal/server functions, marshals the response, and
@@ -197,7 +204,15 @@ func (r *natsRunner) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("subscribe %s: %w", subjRunLua, err)
 	}
-	r.subs = []*nats.Subscription{subS, subP, subR}
+	subI, err := r.nc.Subscribe(subjInfo, r.makeHandler(r.handleInfoMsg))
+	if err != nil {
+		return fmt.Errorf("subscribe %s: %w", subjInfo, err)
+	}
+	subH, err := r.nc.Subscribe(subjHealth, r.makeHandler(handleHealthMsg))
+	if err != nil {
+		return fmt.Errorf("subscribe %s: %w", subjHealth, err)
+	}
+	r.subs = []*nats.Subscription{subS, subP, subR, subI, subH}
 	r.logger.Printf("nats: listening on %s.req.>", "agent."+r.creds.AgentID)
 
 	// Presence heartbeat. Every 15s, publish on
@@ -355,6 +370,19 @@ func handleProbeMsg(ctx context.Context, payload []byte) ([]byte, error) {
 	return mustJSON(resp), nil
 }
 
+// handleInfoMsg is a method on natsRunner (not a free function) so it
+// can read the runner's version string. Identical response to the
+// HTTP /v1/info handler.
+func (r *natsRunner) handleInfoMsg(_ context.Context, _ []byte) ([]byte, error) {
+	return mustJSON(server.Info(r.version)), nil
+}
+
+// handleHealthMsg is a free function — the response is timestamp-only
+// and doesn't depend on runner state.
+func handleHealthMsg(_ context.Context, _ []byte) ([]byte, error) {
+	return mustJSON(server.Health()), nil
+}
+
 func mustJSON(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -363,4 +391,38 @@ func mustJSON(v any) []byte {
 		return []byte(fmt.Sprintf(`{"error":%q}`, err.Error()))
 	}
 	return b
+}
+
+// credsRenewalWindow is how close to expiry we start nagging the user.
+// Set inside DefaultTTL (30d) so the warning fires for the last week
+// before the JWT goes invalid.
+const credsRenewalWindow = 7 * 24 * time.Hour
+
+// warnIfCredsNearExpiry prints a prominent renewal hint to stderr
+// when the loaded creds expire within the renewal window. Silent
+// when creds have no expiry recorded (ExpiresAt == 0) or are still
+// fresh.
+//
+// Lifted out so we can unit-test the boundary cases without spinning
+// up a real NATS connection.
+func warnIfCredsNearExpiry(c *natsCreds, now time.Time) {
+	if c == nil || c.ExpiresAt <= 0 {
+		return
+	}
+	exp := time.Unix(c.ExpiresAt, 0)
+	remaining := exp.Sub(now)
+	switch {
+	case remaining <= 0:
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintf(os.Stderr, "  ⚠ NATS creds expired %s ago.\n",
+			(-remaining).Truncate(time.Minute))
+		fmt.Fprintln(os.Stderr, "    Renew with: hugin-agent --register --gh-token=<gh>")
+		fmt.Fprintln(os.Stderr, "")
+	case remaining <= credsRenewalWindow:
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintf(os.Stderr, "  ⚠ NATS creds expire in %s (%s).\n",
+			remaining.Truncate(time.Hour), exp.UTC().Format(time.RFC3339))
+		fmt.Fprintln(os.Stderr, "    Renew with: hugin-agent --register --gh-token=<gh>")
+		fmt.Fprintln(os.Stderr, "")
+	}
 }

@@ -392,3 +392,43 @@ func containsInt(s []int, x int) bool {
 	}
 	return false
 }
+
+// --- Info / Health --------------------------------------------------------
+
+// InfoResponse body of GET /v1/info and agent.<id>.req.info.
+// Stable contract — workbench reads `capabilities` to decide which
+// UI affordances to show.
+type InfoResponse struct {
+	Name            string   `json:"name"`
+	Version         string   `json:"version"`
+	ProtocolVersion int      `json:"protocol_version"`
+	Capabilities    []string `json:"capabilities"`
+}
+
+// Info returns a stable identity + capability blob. Pure function
+// shared by the HTTP handler in server.go and the NATS req.info
+// subscriber in cmd/hugin-agent/nats.go.
+func Info(version string) InfoResponse {
+	return InfoResponse{
+		Name:            "hugin-agent",
+		Version:         version,
+		ProtocolVersion: 1,
+		Capabilities:    []string{"scan", "probe", "run-lua"},
+	}
+}
+
+// HealthResponse body of GET /v1/health and agent.<id>.req.health.
+type HealthResponse struct {
+	Status string `json:"status"`
+	TS     string `json:"ts"`
+}
+
+// Health is the liveness blob. Always "ok" — if the process can
+// respond, it's healthy. Used as a synchronous check on top of the
+// 15s presence heartbeat for finer-grained connection diagnostics.
+func Health() HealthResponse {
+	return HealthResponse{
+		Status: "ok",
+		TS:     time.Now().UTC().Format(time.RFC3339),
+	}
+}
