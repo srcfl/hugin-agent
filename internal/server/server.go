@@ -82,20 +82,12 @@ func logger(next http.Handler) http.Handler {
 
 func handleInfo(version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"name":             "hugin-agent",
-			"version":          version,
-			"protocol_version": 1,
-			"capabilities":     []string{"scan", "probe", "run-lua"},
-		})
+		writeJSON(w, http.StatusOK, Info(version))
 	}
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-		"ts":     time.Now().UTC().Format(time.RFC3339),
-	})
+	writeJSON(w, http.StatusOK, Health())
 }
 
 func handleScan(w http.ResponseWriter, r *http.Request) {

@@ -178,7 +178,8 @@ func main() {
 		creds, err := loadCreds(credsPath)
 		switch {
 		case err == nil:
-			runner, err = connectNATS(ctx, creds, log.Default())
+			warnIfCredsNearExpiry(creds, time.Now())
+			runner, err = connectNATS(ctx, creds, log.Default(), version)
 			if err != nil {
 				log.Printf("nats: connect failed (continuing in HTTP-only mode): %v", err)
 				runner = nil
