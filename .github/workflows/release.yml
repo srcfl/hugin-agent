@@ -26,4 +26,11 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
+          # GITHUB_TOKEN is auto-scoped to this repo — used for the
+          # GitHub Release upload.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # HOMEBREW_TAP_GITHUB_TOKEN is a cross-repo PAT with
+          # contents:write on srcfl/homebrew-tap and
+          # srcfl/scoop-bucket. Used by goreleaser's brews + scoops
+          # publishers. One token covers both — same org.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

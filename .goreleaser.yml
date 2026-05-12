@@ -54,3 +54,44 @@ changelog:
       - "^test:"
       - "^chore:"
       - "Merge pull request"
+
+# Homebrew tap auto-publish.
+#
+# Requires `HOMEBREW_TAP_GITHUB_TOKEN` repo secret on hugin-agent — a
+# fine-grained PAT (or GitHub App installation token) with
+# `contents: write` on both `srcfl/homebrew-tap` and
+# `srcfl/scoop-bucket`. One token covers both publishers because the
+# accounts live in the same org.
+brews:
+  - name: hugin-agent
+    repository:
+      owner: srcfl
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/srcfl/hugin-agent"
+    description: "Thin local agent for Hugin — scans LAN, talks Modbus, runs Lua drivers"
+    license: "MIT"
+    install: |
+      bin.install "hugin-agent"
+    test: |
+      system "#{bin}/hugin-agent", "--help"
+    commit_author:
+      name: srcfl-release-bot
+      email: release-bot@sourceful.energy
+    commit_msg_template: "hugin-agent: bump to {{ .Tag }}"
+
+# Scoop bucket auto-publish. Same token as the brew tap.
+scoops:
+  - name: hugin-agent
+    repository:
+      owner: srcfl
+      name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/srcfl/hugin-agent"
+    description: "Thin local agent for Hugin — scans LAN, talks Modbus, runs Lua drivers"
+    license: "MIT"
+    commit_author:
+      name: srcfl-release-bot
+      email: release-bot@sourceful.energy
+    commit_msg_template: "hugin-agent: bump to {{ .Tag }}"
