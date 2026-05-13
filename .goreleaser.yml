@@ -54,3 +54,69 @@ changelog:
       - "^test:"
       - "^chore:"
       - "Merge pull request"
+
+# Multi-arch container image publish to GHCR. Same release tag drives
+# tarballs (above) and ghcr.io/srcfl/hugin-agent:vX.Y.Z. The release
+# workflow logs in to ghcr.io before goreleaser runs (see
+# .github/workflows/release.yml).
+#
+# linux/amd64 + linux/arm64 cover Raspberry Pi (arm64) and most x86
+# servers — the primary 42W bundling targets. Add more if a host
+# platform shows up later.
+dockers:
+  - id: hugin-agent-amd64
+    goos: linux
+    goarch: amd64
+    use: buildx
+    dockerfile: Dockerfile
+    image_templates:
+      - "ghcr.io/srcfl/hugin-agent:{{ .Version }}-amd64"
+      - "ghcr.io/srcfl/hugin-agent:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/srcfl/hugin-agent:latest-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title=hugin-agent"
+      - "--label=org.opencontainers.image.description=Local agent for the Hugin driver workbench"
+      - "--label=org.opencontainers.image.url=https://github.com/srcfl/hugin-agent"
+      - "--label=org.opencontainers.image.source=https://github.com/srcfl/hugin-agent"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+  - id: hugin-agent-arm64
+    goos: linux
+    goarch: arm64
+    use: buildx
+    dockerfile: Dockerfile
+    image_templates:
+      - "ghcr.io/srcfl/hugin-agent:{{ .Version }}-arm64"
+      - "ghcr.io/srcfl/hugin-agent:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/srcfl/hugin-agent:latest-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title=hugin-agent"
+      - "--label=org.opencontainers.image.description=Local agent for the Hugin driver workbench"
+      - "--label=org.opencontainers.image.url=https://github.com/srcfl/hugin-agent"
+      - "--label=org.opencontainers.image.source=https://github.com/srcfl/hugin-agent"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+# Combine the per-arch images into one multi-arch manifest so
+# `docker pull ghcr.io/srcfl/hugin-agent:v0.2.1` works on either
+# host architecture and Docker picks the right one.
+docker_manifests:
+  - name_template: "ghcr.io/srcfl/hugin-agent:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/srcfl/hugin-agent:{{ .Version }}-amd64"
+      - "ghcr.io/srcfl/hugin-agent:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/srcfl/hugin-agent:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/srcfl/hugin-agent:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/srcfl/hugin-agent:v{{ .Major }}.{{ .Minor }}-arm64"
+  - name_template: "ghcr.io/srcfl/hugin-agent:latest"
+    image_templates:
+      - "ghcr.io/srcfl/hugin-agent:latest-amd64"
+      - "ghcr.io/srcfl/hugin-agent:latest-arm64"

@@ -35,6 +35,34 @@ scoop install hugin-agent
 hugin-agent
 ```
 
+### Docker
+
+Published as a multi-arch image on every release tag. Use as a
+sidecar in your existing compose stack (e.g. forty-two-watts):
+
+```yaml
+# docker-compose.hugin.yml
+services:
+  hugin-agent:
+    image: ghcr.io/srcfl/hugin-agent:latest
+    restart: unless-stopped
+    network_mode: host          # see Modbus devices on the host LAN
+    volumes:
+      - hugin-agent-data:/var/lib/hugin-agent
+volumes:
+  hugin-agent-data:
+```
+
+```bash
+docker compose -f docker-compose.hugin.yml up -d
+docker logs hugin-agent          # the pairing URL is printed on stderr
+```
+
+`/var/lib/hugin-agent/creds.json` persists NATS pairing across
+restarts. Without `network_mode: host` the agent can still talk to
+the workbench (publish port 19090) but won't see Modbus devices on
+the user's LAN — pick whichever fits your security model.
+
 ### From source (any platform with Go 1.25+)
 
 ```bash
