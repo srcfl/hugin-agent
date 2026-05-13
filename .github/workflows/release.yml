@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write   # goreleaser uploads to GitHub Releases
+  packages: write   # goreleaser pushes to ghcr.io/srcfl/hugin-agent
 
 jobs:
   goreleaser:
@@ -20,6 +21,22 @@ jobs:
         with:
           go-version: "1.25"
           cache: true
+
+      # Multi-arch Docker build for ghcr.io/srcfl/hugin-agent (linux/amd64
+      # + linux/arm64). buildx + qemu enable cross-arch compilation in the
+      # x86 GitHub runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: goreleaser/goreleaser-action@v6
         with:
