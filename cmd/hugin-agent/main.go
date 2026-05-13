@@ -94,8 +94,31 @@ func main() {
 		if err := saveCreds(credsPath, c); err != nil {
 			log.Fatalf("write creds: %v", err)
 		}
-		fmt.Fprintf(os.Stderr, "Registered as agent %s\nCreds written to %s\nNATS URL: %s\n",
-			c.AgentID, credsPath, c.NATSURL)
+
+		// Build the workbench deep-link for the *remote-pair* flow.
+		// settings.html ingests #pair_agent_id=…&kind=remote and
+		// calls /v1/agents/{id}/owner-creds to mint matching
+		// OWNER-role credentials for the browser side. Without this,
+		// the user would have no obvious way to tell the workbench
+		// which agent_id to bind to.
+		pairURL := *pairingPage + "#pair_agent_id=" +
+			url.QueryEscape(c.AgentID) + "&kind=remote"
+
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintf(os.Stderr, "  Registered as agent %s\n", c.AgentID)
+		fmt.Fprintf(os.Stderr, "  Creds written to %s\n", credsPath)
+		fmt.Fprintf(os.Stderr, "  NATS URL: %s\n", c.NATSURL)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Now pair the workbench to this agent:")
+		fmt.Fprintf(os.Stderr, "    %s\n", pairURL)
+		fmt.Fprintln(os.Stderr, "")
+		if !*noBrowser && openBrowser(pairURL) {
+			fmt.Fprintln(os.Stderr, "  Opened your browser to finish pairing.")
+		} else {
+			fmt.Fprintln(os.Stderr, "  Open the URL above to finish pairing,")
+			fmt.Fprintln(os.Stderr, "  or run `hugin-agent` (no flags) to start the agent now.")
+		}
+		fmt.Fprintln(os.Stderr, "")
 		return
 	}
 
